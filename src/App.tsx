@@ -1,88 +1,48 @@
 import React, { useState } from "react";
-import CodeEditor from "./components/CodeEditor";
-import * as ts from "typescript";
-
-const challenge = {
-  initialCode:
-    "function reverseString(str: string): string {\n  // Your code here\n}",
-};
-
-interface CompileResult {
-  success: boolean;
-  diagnostics: string[];
-}
-
-const checkForErrors = (code: string): CompileResult => {
-  // TypeScript 설정
-  const options: ts.CompilerOptions = {
-    noEmitOnError: true,
-    strict: true,
-    target: ts.ScriptTarget.ES2015,
-  };
-
-  // 기본 라이브러리 로드
-  const defaultLib = ts.getDefaultLibFilePath(options);
-
-  const file = ts.createSourceFile(
-    "temp.ts",
-    code,
-    ts.ScriptTarget.ES2015,
-    true
-  );
-
-  const program = ts.createProgram(["temp.ts"], options, {
-    getSourceFile: (fileName) => (fileName === "temp.ts" ? file : undefined),
-    writeFile: () => {},
-    getDefaultLibFileName: () => defaultLib, // 기본 라이브러리 파일 경로 제공
-    useCaseSensitiveFileNames: () => true,
-    getCanonicalFileName: (fileName) => fileName,
-    getCurrentDirectory: () => "",
-    getNewLine: () => "\n",
-    fileExists: (fileName) => fileName === "temp.ts",
-    readFile: (fileName) =>
-      fileName === defaultLib ? ts.sys.readFile(defaultLib) : undefined, // 기본 라이브러리 읽기
-    directoryExists: () => true,
-    getDirectories: () => [],
-  });
-
-  const diagnostics = ts.getPreEmitDiagnostics(program);
-
-  if (diagnostics.length === 0) {
-    return { success: true, diagnostics: [] };
-  }
-
-  const errorMessages = diagnostics.map((diagnostic) => {
-    const message = ts.flattenDiagnosticMessageText(
-      diagnostic.messageText,
-      "\n"
-    );
-    if (diagnostic.file) {
-      const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(
-        diagnostic.start!
-      );
-      return `Error ${diagnostic.file.fileName} (${line + 1},${
-        character + 1
-      }): ${message}`;
-    }
-    return `Error: ${message}`;
-  });
-
-  return { success: false, diagnostics: errorMessages };
-};
+import MonacoEditor from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 
 const App = () => {
-  const [code, setCode] = useState(challenge.initialCode);
+  const [code, setCode] = useState("function hello() { return 'Hello World'; }");
+  const [errors, setErrors] = useState<monaco.editor.IMarker[]>([]);
 
-  const handleSubmit = () => {
-    // console.log(code);
-    const result = checkForErrors(code);
-    console.log(result);
+  const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
+    // Monaco Editor가 마운트된 후 실행되는 함수
+
+    editor.onDidChangeModelDecorations(() => {
+      const model = editor.getModel();
+      if (model) {
+        const markers = monaco.editor.getModelMarkers({ resource: model.uri });
+        console.log(model.uri);
+        setErrors(markers); // 에러를 상태로 저장
+      }
+    });
   };
 
   return (
     <div>
-      <button onClick={handleSubmit}>제출하기</button>
-      <CodeEditor code={code} onCodeChange={setCode} />
+      <h3>Monaco TypeScript Error Detection</h3>
+      <MonacoEditor
+        height="500px"
+        defaultLanguage="typescript"
+        value={code}
+        onChange={(value) => setCode(value || "")}
+        onMount={handleEditorDidMount}
+      />
+      <div>
+        <h4>Errors:</h4>
+        {errors.length > 0 ? (
+          <ul>
+            {errors.map((error, index) => (
+              <li key={index}>
+                {error.message} (Line: {error.startLineNumber}, Column: {error.startColumn})
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No errors</p>
+        )}
+      </div>
     </div>
   );
 };
